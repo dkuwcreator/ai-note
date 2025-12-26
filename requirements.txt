@@ -1,0 +1,6 @@
+pytest
+python-dotenv
+requests
+black
+pre-commit
+ruff

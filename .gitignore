@@ -1,0 +1,65 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.eggs/
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+*.manifest
+*.spec
+_MEI*/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# MyPy
+.mypy_cache/
+
+# Ruff cache
+.ruff_cache/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+secrets/
+
+# Logs
+*.log
+
+# Database files
+*.db
+*.sqlite3
+
+# Temporary files
+.temp/
+tmp/

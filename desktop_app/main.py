@@ -1,0 +1,41 @@
+"""Entry point for the desktop app (minimal Tkinter-based UI)."""
+from __future__ import annotations
+import sys
+import logging
+from pathlib import Path
+from desktop_app.ui import run_app
+
+
+def _configure_logging() -> None:
+    root = logging.getLogger()
+    if root.handlers:
+        return
+    log_file = Path(__file__).resolve().parents[1] / "app.log"
+    handlers = [logging.StreamHandler()]
+    try:
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+    except Exception:
+        # If file handler can't be created, continue with console logging
+        pass
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=handlers,
+    )
+
+
+def main() -> int:
+    _configure_logging()
+    logger = logging.getLogger(__name__)
+    try:
+        logger.info("Starting AI Notepad")
+        run_app()
+        logger.info("AI Notepad exited normally")
+        return 0
+    except Exception:
+        logger.exception("Error launching app")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
