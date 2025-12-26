@@ -100,3 +100,66 @@ class AIClient:
         except Exception as e:
             self.log.record(prompt, attempt or 0, False, error=str(e))
             raise RuntimeError("AI request failed") from (e or last_exc)
+
+    def test_connection(self, deployment: Optional[str] = None, timeout: Optional[float] = None) -> dict:
+        """Test the configured AI connection.
+
+        Returns a dict with keys: `ok` (bool), `status` (str), `details` (str).
+        Categories for `status`: `ok`, `auth_error`, `endpoint_error`, `timeout`, `other`.
+        """
+        self.settings = get_settings()
+        deployment = deployment or self.settings.azure_openai_deployment
+        # Settings object may not expose a specific timeout field; fall back to client timeout
+        try:
+            cfg_timeout = float(getattr(self.settings, "azure_openai_timeout", self.timeout) or self.timeout)
+        except Exception:
+            cfg_timeout = self.timeout
+        test_timeout = timeout or max(1.0, cfg_timeout)
+        try:
+            url, headers = self._build_urls_and_headers(deployment)
+        except Exception as e:
+            return {"ok": False, "status": "endpoint_error", "details": str(e)}
+
+        payload = {"messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
+        try:
+            resp = self.transport(url, headers=headers, json=payload, timeout=test_timeout)
+        except requests.exceptions.Timeout as e:
+            return {"ok": False, "status": "timeout", "details": str(e)}
+        except requests.exceptions.RequestException as e:
+            return {"ok": False, "status": "other", "details": str(e)}
+
+        try:
+            if resp.status_code in (401, 403):
+                return {"ok": False, "status": "auth_error", "details": resp.text}
+            resp.raise_for_status()
+            # lightweight success
+            return {"ok": True, "status": "ok", "details": f"HTTP {resp.status_code}"}
+        except requests.exceptions.HTTPError as e:
+            return {"ok": False, "status": "other", "details": str(e)}
+
+    def apply_rewrite_mode(self, mode: object | str, text: str) -> str:
+        """Apply a rewrite mode to the provided text.
+
+        `mode` may be a `storage.db.RewriteMode`-like object with an
+        `instruction_template` attribute, or a string key referring to a
+        preset in `ai.presets.PRESETS`.
+        """
+        from storage import db as storage_db
+        from ai.presets import PRESETS
+
+        template = None
+        # If mode is a string, try preset first, else treat as name
+        if isinstance(mode, str):
+            template = PRESETS.get(mode)
+        # If mode has instruction_template attribute, use it
+        if template is None:
+            try:
+                template = getattr(mode, "instruction_template", None)
+            except Exception:
+                template = None
+        if template is None:
+            raise KeyError("Unknown rewrite mode or preset")
+
+        # Build prompt by interpolating input into template placeholders
+        prompt = template.replace("{text}", text).replace("{input}", text)
+        return self.rewrite(prompt)

@@ -3,7 +3,13 @@ from __future__ import annotations
 import sys
 import logging
 from pathlib import Path
-from desktop_app.ui import run_app
+import tkinter as tk
+import tkinter.messagebox as messagebox
+from desktop_app.ui import App
+try:
+    from desktop_app.settings_dialog import SettingsDialog
+except Exception:
+    SettingsDialog = None
 
 
 def _configure_logging() -> None:
@@ -29,7 +35,38 @@ def main() -> int:
     logger = logging.getLogger(__name__)
     try:
         logger.info("Starting AI Notepad")
-        run_app()
+        # Create Tk root and add top-level menu with Settings entry
+        root = tk.Tk()
+        root.title("AI Notepad (MVP)")
+        root.geometry("900x600")
+
+        menubar = tk.Menu(root)
+        settings_menu = tk.Menu(menubar, tearoff=0)
+
+        # Initialize application UI
+        app = App(root)
+
+        def _open_settings():
+            if SettingsDialog is None:
+                messagebox.showinfo("Settings", "Settings dialog unavailable (PySide6 not installed).")
+                return
+            try:
+                # The SettingsDialog is a Qt dialog; attempt to launch it as a separate dialog.
+                dlg = SettingsDialog()
+                dlg.exec()
+                # refresh UI options after settings may have changed
+                try:
+                    app.reload_rewrite_options()
+                except Exception:
+                    pass
+            except Exception:
+                messagebox.showerror("Settings", "Failed to open Settings dialog.")
+
+        settings_menu.add_command(label="Open Settings", command=_open_settings)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        root.config(menu=menubar)
+
+        root.mainloop()
         logger.info("AI Notepad exited normally")
         return 0
     except Exception:

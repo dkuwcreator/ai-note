@@ -52,6 +52,7 @@ Thumbs.db
 # Environment / secrets
 .env
 secrets/
+*.secrets
 
 # Logs
 *.log

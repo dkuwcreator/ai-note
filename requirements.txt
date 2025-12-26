@@ -4,3 +4,6 @@ requests
 black
 pre-commit
 ruff
+PySide6
+keyring
+cryptography

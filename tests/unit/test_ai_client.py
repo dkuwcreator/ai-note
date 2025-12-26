@@ -104,3 +104,52 @@ def test_client_retries(monkeypatch):
     res = client.rewrite("hello")
     assert "revised text" in res
     assert any(not e.get("success", True) for e in client.log.entries) is True
+
+
+def test_test_connection_success(monkeypatch):
+    class Resp:
+        def __init__(self):
+            self.status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "pong"}}]}
+
+    def transport(url, headers, json, timeout):
+        return Resp()
+
+    import os
+    os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example"
+    os.environ["AZURE_OPENAI_DEPLOYMENT"] = "test"
+
+    client = AIClient(transport=transport, timeout=0.5, max_retries=0)
+    r = client.test_connection()
+    assert r["ok"] is True
+    assert r["status"] == "ok"
+
+
+def test_test_connection_auth_error(monkeypatch):
+    class Resp:
+        def __init__(self):
+            self.status_code = 401
+            self.text = "Unauthorized"
+
+        def raise_for_status(self):
+            raise Exception("401")
+
+        def json(self):
+            return {}
+
+    def transport(url, headers, json, timeout):
+        return Resp()
+
+    import os
+    os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example"
+    os.environ["AZURE_OPENAI_DEPLOYMENT"] = "test"
+
+    client = AIClient(transport=transport, timeout=0.5, max_retries=0)
+    r = client.test_connection()
+    assert r["ok"] is False
+    assert r["status"] == "auth_error"

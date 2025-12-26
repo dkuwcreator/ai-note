@@ -5,11 +5,16 @@ from tkinter import scrolledtext
 import logging
 from .editor import Editor
 from storage import repository
+from storage import db as storage_db
 from ai.presets import PRESETS, build_prompt
 from ai.client import AIClient
 import concurrent.futures
 import tkinter.messagebox as messagebox
 from config.settings import get_settings
+try:
+    from .settings_dialog import SettingsDialog
+except Exception:
+    SettingsDialog = None
 
 class App(tk.Frame):
     def __init__(self, master=None):
@@ -41,15 +46,24 @@ class App(tk.Frame):
         self.editor.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # AI rewrite controls
-        self.preset_var = tk.StringVar(value=list(PRESETS.keys())[0])
-        self.preset_menu = tk.OptionMenu(self.sidebar, self.preset_var, *list(PRESETS.keys()))
+        self.preset_var = tk.StringVar()
+        self.preset_menu = tk.OptionMenu(self.sidebar, self.preset_var, "")
+        # populate menu items properly
+        self.reload_rewrite_options()
         self.preset_menu.pack(padx=8, pady=4, fill=tk.X)
 
         self.rewrite_btn = tk.Button(self.sidebar, text="Rewrite (AI)", command=self.on_rewrite)
         self.rewrite_btn.pack(padx=8, pady=4, fill=tk.X)
 
+        self.test_conn_btn = tk.Button(self.sidebar, text="Test AI Connection", command=self.on_test_connection)
+        self.test_conn_btn.pack(padx=8, pady=4, fill=tk.X)
+
         self.ai_status = tk.Label(self.sidebar, text="")
         self.ai_status.pack(padx=8, pady=(4,8))
+
+        # Settings menu/button (open dialog if available)
+        settings_btn = tk.Button(self.sidebar, text="Settings", command=self.open_settings)
+        settings_btn.pack(padx=8, pady=4, fill=tk.X)
 
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self._ai_client = AIClient()
@@ -102,11 +116,33 @@ class App(tk.Frame):
             messagebox.showerror("AI Not Configured", msg)
             return
 
-        preset = self.preset_var.get()
-        prompt = build_prompt(preset, text)
+        sel_option = self.preset_var.get()
         self.ai_status.config(text="Requesting AI...")
-        self.logger.info("Submitting rewrite request", extra={"preset": preset})
-        fut = self._executor.submit(self._ai_client.rewrite, prompt)
+        # Determine if selection is a stored mode or a preset
+        try:
+            if sel_option.startswith("mode:"):
+                # format: mode:<id>:<name>
+                parts = sel_option.split(":", 2)
+                mode_id = int(parts[1])
+                conn = storage_db.get_connection()
+                mode = next((m for m in storage_db.list_rewrite_modes(conn) if m.id == mode_id), None)
+                if not mode:
+                    raise RuntimeError("Selected rewrite mode not found")
+                fut = self._executor.submit(self._ai_client.apply_rewrite_mode, mode, text)
+            elif sel_option.startswith("preset:"):
+                key = sel_option.split(":", 1)[1]
+                prompt = build_prompt(key, text)
+                fut = self._executor.submit(self._ai_client.rewrite, prompt)
+            else:
+                # fallback to first preset
+                prompt = build_prompt(list(PRESETS.keys())[0], text)
+                fut = self._executor.submit(self._ai_client.rewrite, prompt)
+            self.logger.info("Submitting rewrite request", extra={"selection": sel_option})
+        except Exception as e:
+            self.logger.exception("Failed to submit rewrite request")
+            messagebox.showerror("AI Error", str(e))
+            self.ai_status.config(text="")
+            return
 
         def cb(future):
             try:
@@ -123,7 +159,6 @@ class App(tk.Frame):
                 PreviewDialog(self.master, original=text, rewritten=result, apply_callback=lambda r: self._apply_rewrite(sel, r))
 
             self.master.after(0, show_preview)
-
         fut.add_done_callback(cb)
 
     def _apply_rewrite(self, sel, new_text):
@@ -135,12 +170,96 @@ class App(tk.Frame):
             self.editor.text.delete('1.0', tk.END)
             self.editor.text.insert('1.0', new_text)
 
+    def on_test_connection(self):
+        """Asynchronously test the AI connection and display categorized results."""
+        settings = get_settings()
+        if not settings.azure_openai_endpoint or not settings.azure_openai_deployment:
+            messagebox.showerror("AI Not Configured", "Azure OpenAI endpoint or deployment is not configured.")
+            return
+
+        self.ai_status.config(text="Testing connection...")
+        fut = self._executor.submit(self._ai_client.test_connection)
+
+        def cb(future):
+            try:
+                res = future.result()
+            except Exception as e:
+                self.logger.exception("Test connection failed")
+                self.master.after(0, lambda: (self.ai_status.config(text="Test failed"), messagebox.showerror("Test Error", str(e))))
+                return
+
+            # Update UI on main thread
+            def ui_update():
+                status = res.get("status", "other")
+                ok = res.get("ok", False)
+                details = res.get("details", "")
+                if ok:
+                    self.ai_status.config(text="Connection OK")
+                    messagebox.showinfo("AI Connection", f"OK — {details}")
+                else:
+                    self.ai_status.config(text=f"Connection: {status}")
+                    messagebox.showerror("AI Connection", f"Status: {status}\nDetails: {details}")
+
+            self.master.after(0, ui_update)
+
+        fut.add_done_callback(cb)
+
+    def open_settings(self):
+        if SettingsDialog is None:
+            messagebox.showinfo("Settings", "Settings dialog unavailable (PySide6 not installed).")
+            return
+        try:
+            dlg = SettingsDialog()
+            dlg.exec()
+            # After settings dialog closes, refresh rewrite options
+            try:
+                self.reload_rewrite_options()
+            except Exception:
+                pass
+        except Exception:
+            messagebox.showerror("Settings", "Failed to open Settings dialog.")
+
+    def reload_rewrite_options(self):
+        # Rebuild the rewrite options from storage and presets
+        try:
+            conn = storage_db.get_connection()
+            modes = storage_db.list_rewrite_modes(conn)
+        except Exception:
+            modes = []
+
+        options = []
+        for m in modes:
+            options.append(f"mode:{m.id}:{m.name}")
+        for k in PRESETS.keys():
+            options.append(f"preset:{k}")
+
+        # Clear existing menu
+        menu = self.preset_menu['menu']
+        menu.delete(0, 'end')
+        for opt in options:
+            menu.add_command(label=opt, command=lambda v=opt: self.preset_var.set(v))
+
+        # Set default if not set
+        if options and not self.preset_var.get():
+            self.preset_var.set(options[0])
+
+
 def run_app() -> None:
     root = tk.Tk()
     root.title("AI Notepad (MVP)")
     root.geometry("900x600")
     App(root)
     root.mainloop()
+
+    
+def _build_menu_options_from_modes_and_presets(modes):
+    options = []
+    for m in modes:
+        options.append(f"mode:{m.id}:{m.name}")
+    for k in PRESETS.keys():
+        options.append(f"preset:{k}")
+    return options
+
 
 
 class PreviewDialog(tk.Toplevel):
@@ -175,3 +294,17 @@ class PreviewDialog(tk.Toplevel):
 
     def _cancel(self):
         self.destroy()
+
+    def open_settings(self):
+        if SettingsDialog is None:
+            messagebox.showinfo("Settings", "Settings dialog unavailable (PySide6 not installed).")
+            return
+        # If PySide6 is available, open the Qt dialog in a separate process/window.
+        try:
+            qt_app = QtWidgets.QApplication.instance()
+            if qt_app is None:
+                qt_app = QtWidgets.QApplication([])
+            dlg = SettingsDialog()
+            dlg.exec()
+        except Exception:
+            messagebox.showerror("Settings", "Failed to open Settings dialog.")

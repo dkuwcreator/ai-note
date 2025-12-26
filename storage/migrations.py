@@ -36,6 +36,28 @@ CREATE TABLE IF NOT EXISTS recent (
   note_id INTEGER REFERENCES notes(id) ON DELETE CASCADE,
   last_opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS connection_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  endpoint TEXT NOT NULL,
+  deployment_id TEXT NOT NULL,
+  api_version TEXT,
+  timeout INTEGER DEFAULT 6,
+  retry_prefs TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS rewrite_modes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  instruction_template TEXT NOT NULL,
+  enabled INTEGER DEFAULT 1,
+  "order" INTEGER NOT NULL,
+  applies_to TEXT CHECK(applies_to IN ('selection-only','whole-note-default')) DEFAULT 'selection-only',
+  builtin INTEGER DEFAULT 0,
+  advanced_settings TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 -- FTS5 virtual table created conditionally in code if supported
 """
 
