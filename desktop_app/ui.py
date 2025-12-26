@@ -11,10 +11,21 @@ from ai.client import AIClient
 import concurrent.futures
 import tkinter.messagebox as messagebox
 from config.settings import get_settings
-try:
-    from .settings_dialog import SettingsDialog
-except Exception:
-    SettingsDialog = None
+
+
+def _load_qt_settings_dialog():
+    """Load Qt settings dialog lazily.
+
+    Importing PySide6/QtWidgets during Tkinter app startup can crash the process
+    if any QWidget is created before a QApplication exists.
+    """
+
+    try:
+        from PySide6 import QtWidgets  # type: ignore
+        from .settings_dialog import SettingsDialog  # type: ignore
+    except Exception:
+        return None, None
+    return QtWidgets, SettingsDialog
 
 class App(tk.Frame):
     def __init__(self, master=None):
@@ -205,10 +216,14 @@ class App(tk.Frame):
         fut.add_done_callback(cb)
 
     def open_settings(self):
-        if SettingsDialog is None:
+        QtWidgets, SettingsDialog = _load_qt_settings_dialog()
+        if QtWidgets is None or SettingsDialog is None:
             messagebox.showinfo("Settings", "Settings dialog unavailable (PySide6 not installed).")
             return
         try:
+            qt_app = QtWidgets.QApplication.instance()
+            if qt_app is None:
+                qt_app = QtWidgets.QApplication([])
             dlg = SettingsDialog()
             dlg.exec()
             # After settings dialog closes, refresh rewrite options
@@ -296,10 +311,10 @@ class PreviewDialog(tk.Toplevel):
         self.destroy()
 
     def open_settings(self):
-        if SettingsDialog is None:
+        QtWidgets, SettingsDialog = _load_qt_settings_dialog()
+        if QtWidgets is None or SettingsDialog is None:
             messagebox.showinfo("Settings", "Settings dialog unavailable (PySide6 not installed).")
             return
-        # If PySide6 is available, open the Qt dialog in a separate process/window.
         try:
             qt_app = QtWidgets.QApplication.instance()
             if qt_app is None:

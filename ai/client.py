@@ -31,11 +31,17 @@ class AIClient:
 
     def _build_urls_and_headers(self, deployment: str) -> (str, dict):
         endpoint = self.settings.azure_openai_endpoint
+        api_version = getattr(self.settings, "azure_openai_api_version", None)
         api_key = self.settings.azure_openai_api_key
         if not endpoint or not deployment:
             raise RuntimeError("Azure OpenAI endpoint and deployment must be configured")
+        if not api_version:
+            raise RuntimeError(
+                "Azure OpenAI API version is not configured. Set AZURE_OPENAI_API_VERSION "
+                "(or fill in API Version in the Settings dialog)."
+            )
         # Prefer chat completions route; if not available consumer can use completions path
-        chat_url = f"{endpoint.rstrip('/')}/openai/deployments/{deployment}/chat/completions"
+        chat_url = f"{endpoint.rstrip('/')}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["api-key"] = api_key

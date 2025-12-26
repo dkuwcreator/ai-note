@@ -25,6 +25,7 @@ def test_build_prompt_known():
 def test_ai_client_success_on_first_try(monkeypatch):
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.azure.com")
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "test-deploy")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-01")
 
     def transport(url, headers, json, timeout):
         return DummyResponse()
@@ -38,6 +39,7 @@ def test_ai_client_retries_then_success(monkeypatch):
     calls = {"n": 0}
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.azure.com")
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "test-deploy")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-01")
 
     def transport(url, headers, json, timeout):
         calls["n"] += 1
@@ -83,6 +85,7 @@ def test_client_success(monkeypatch):
     import os
     os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example"
     os.environ["AZURE_OPENAI_DEPLOYMENT"] = "test"
+    os.environ["AZURE_OPENAI_API_VERSION"] = "2024-10-01"
     res = client.rewrite("hello")
     assert "revised text" in res
     assert len(client.log.entries) >= 1
@@ -99,6 +102,7 @@ def test_client_retries(monkeypatch):
     import os
     os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example"
     os.environ["AZURE_OPENAI_DEPLOYMENT"] = "test"
+    os.environ["AZURE_OPENAI_API_VERSION"] = "2024-10-01"
 
     client = AIClient(transport=transport, timeout=0.1, max_retries=2)
     res = client.rewrite("hello")
@@ -123,6 +127,7 @@ def test_test_connection_success(monkeypatch):
     import os
     os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example"
     os.environ["AZURE_OPENAI_DEPLOYMENT"] = "test"
+    os.environ["AZURE_OPENAI_API_VERSION"] = "2024-10-01"
 
     client = AIClient(transport=transport, timeout=0.5, max_retries=0)
     r = client.test_connection()
@@ -148,6 +153,7 @@ def test_test_connection_auth_error(monkeypatch):
     import os
     os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example"
     os.environ["AZURE_OPENAI_DEPLOYMENT"] = "test"
+    os.environ["AZURE_OPENAI_API_VERSION"] = "2024-10-01"
 
     client = AIClient(transport=transport, timeout=0.5, max_retries=0)
     r = client.test_connection()

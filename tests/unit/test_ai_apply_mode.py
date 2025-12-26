@@ -3,6 +3,10 @@ from storage.db import RewriteMode
 
 
 def test_apply_rewrite_mode_uses_mode_template(monkeypatch):
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.azure.com")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "test-deploy")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-01")
+
     # emulate a transport that returns a successful chat response
     class Resp:
         def __init__(self):

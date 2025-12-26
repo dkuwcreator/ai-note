@@ -6,10 +6,6 @@ from pathlib import Path
 import tkinter as tk
 import tkinter.messagebox as messagebox
 from desktop_app.ui import App
-try:
-    from desktop_app.settings_dialog import SettingsDialog
-except Exception:
-    SettingsDialog = None
 
 
 def _configure_logging() -> None:
@@ -47,18 +43,8 @@ def main() -> int:
         app = App(root)
 
         def _open_settings():
-            if SettingsDialog is None:
-                messagebox.showinfo("Settings", "Settings dialog unavailable (PySide6 not installed).")
-                return
             try:
-                # The SettingsDialog is a Qt dialog; attempt to launch it as a separate dialog.
-                dlg = SettingsDialog()
-                dlg.exec()
-                # refresh UI options after settings may have changed
-                try:
-                    app.reload_rewrite_options()
-                except Exception:
-                    pass
+                app.open_settings()
             except Exception:
                 messagebox.showerror("Settings", "Failed to open Settings dialog.")
 
